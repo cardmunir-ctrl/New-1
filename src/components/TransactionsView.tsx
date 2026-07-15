@@ -298,7 +298,6 @@ export default function TransactionsView({
 
   // Start Transaction Creation
   const openCreateModal = () => {
-    setCustomerName('');
     setDate('2026-07-15');
     setItems([]);
     setDiscounts([]);

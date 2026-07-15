@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, Transaction, Discount, ViewType, ThemeType } from './types';
-import { INITIAL_PRODUCTS, INITIAL_TRANSACTIONS } from './data/mockData';
-import { insforge } from './lib/insforge';
+import { INITIAL_PRODUCTS, INITIAL_TRANSACTIONS } from './data/mockData.ts';
+import { insforge } from './lib/insforge.ts';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 

@@ -19,7 +19,6 @@ export interface TransactionItem {
 
 export interface Transaction {
   id: string;
-  customerName: string;
   date: string; // format: YYYY-MM-DD
   items: TransactionItem[]; // Multiple items instead of single product
   discounts: Discount[];

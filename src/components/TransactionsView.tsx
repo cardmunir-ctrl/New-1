@@ -73,7 +73,7 @@ export const generateReceiptPDF = (t: Transaction) => {
   doc.setTextColor(30, 30, 40);
   doc.setFontSize(11);
   doc.setFont('Helvetica', 'bold');
-  doc.text(t.customerName || 'Umum', 15, 64);
+  doc.text(t.customerName || '-', 15, 64);
   
   // Reference info
   doc.setTextColor(110, 115, 125);
@@ -341,7 +341,8 @@ export default function TransactionsView({
     e.preventDefault();
     if (items.length === 0) return;
 
-    const finalCustomerName = customerName.trim() || 'Umum';
+    // Keep customer name empty if not provided (don't default to 'Umum')
+    const finalCustomerName = customerName.trim();
 
     const discountList: Discount[] = discounts.map((d, index) => ({
       id: `d-form-${Date.now()}-${index}`,

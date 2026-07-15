@@ -72,8 +72,13 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
   const productQuantities = useMemo(() => {
     const counts: { [productName: string]: number } = {};
     filteredTransactions.forEach((t) => {
-      const name = t.productName || 'Barang Umum';
-      counts[name] = (counts[name] || 0) + (t.quantity || 1);
+      // Only include transactions with customer name
+      if (!t.customerName || t.customerName.trim() === '') return;
+      
+      // Aggregate all items in the transaction
+      t.items.forEach((item) => {
+        counts[item.productName] = (counts[item.productName] || 0) + item.quantity;
+      });
     });
     return Object.entries(counts)
       .map(([name, qty]) => ({ name, qty }))
@@ -89,19 +94,23 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
     // Generate headers
     const headers = ['No Nota', 'Tanggal', 'Nama Pelanggan', 'Barang', 'Qty', 'Harga Satuan', 'Potongan', 'Total Bersih', 'Dibayar', 'Hutang'];
     
-    // Generate rows
-    const rows = filteredTransactions.map(t => [
-      t.id,
-      t.date,
-      t.customerName,
-      t.productName,
-      t.quantity,
-      t.priceAtSale,
-      t.totalDiscountAmount,
-      t.totalBill,
-      t.paidAmount,
-      t.debtAmount
-    ]);
+    // Generate rows - exclude transactions without customer name
+    const rows = filteredTransactions
+      .filter(t => t.customerName && t.customerName.trim() !== '')
+      .flatMap(t => 
+        t.items.map(item => [
+          t.id,
+          t.date,
+          t.customerName,
+          item.productName,
+          item.quantity,
+          item.priceAtSale,
+          t.totalDiscountAmount,
+          t.totalBill,
+          t.paidAmount,
+          t.debtAmount
+        ])
+      );
 
     // Combine CSV
     const csvContent = [
@@ -200,73 +209,80 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
     doc.text('Status', 180, 92);
 
     let currentY = 101;
+    let rowIndex = 0;
     doc.setFont('Helvetica', 'normal');
     doc.setTextColor(60, 60, 70);
 
-    filteredTransactions.forEach((t, index) => {
-      // Manage page overflow cleanly
-      if (currentY > 275) {
-        doc.addPage();
-        currentY = 20;
-        
-        // Draw Header on new pages
-        doc.setFillColor(35, 35, 51);
-        doc.rect(15, 10, 180, 8, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(8);
+    filteredTransactions.forEach((t) => {
+      // Skip transactions without customer name
+      if (!t.customerName || t.customerName.trim() === '') return;
+
+      t.items.forEach((item) => {
+        // Manage page overflow cleanly
+        if (currentY > 275) {
+          doc.addPage();
+          currentY = 20;
+          
+          // Draw Header on new pages
+          doc.setFillColor(35, 35, 51);
+          doc.rect(15, 10, 180, 8, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(8);
+          doc.setFont('Helvetica', 'bold');
+          doc.text('No Nota', 18, 15);
+          doc.text('Pelanggan', 42, 15);
+          doc.text('Barang & Qty', 82, 15);
+          doc.text('Potongan', 128, 15);
+          doc.text('Total Bersih', 154, 15);
+          doc.text('Status', 180, 15);
+          currentY = 24;
+        }
+
+        // Zebra stripes for readability
+        if (rowIndex % 2 === 0) {
+          doc.setFillColor(250, 251, 252);
+          doc.rect(15, currentY - 5, 180, 9, 'F');
+        }
+
+        // Draw horizontal line separator
+        doc.setDrawColor(240, 240, 245);
+        doc.line(15, currentY + 4, 195, currentY + 4);
+
         doc.setFont('Helvetica', 'bold');
-        doc.text('No Nota', 18, 15);
-        doc.text('Pelanggan', 42, 15);
-        doc.text('Barang & Qty', 82, 15);
-        doc.text('Potongan', 128, 15);
-        doc.text('Total Bersih', 154, 15);
-        doc.text('Status', 180, 15);
-        currentY = 24;
-      }
+        doc.setTextColor(79, 70, 229);
+        doc.setFontSize(8);
+        doc.text(t.id, 18, currentY);
 
-      // Zebra stripes for readability
-      if (index % 2 === 0) {
-        doc.setFillColor(250, 251, 252);
-        doc.rect(15, currentY - 5, 180, 9, 'F');
-      }
+        doc.setFont('Helvetica', 'normal');
+        doc.setTextColor(30, 30, 40);
+        const custName = t.customerName.length > 18 ? t.customerName.substring(0, 15) + '...' : t.customerName;
+        doc.text(custName, 42, currentY);
 
-      // Draw horizontal line separator
-      doc.setDrawColor(240, 240, 245);
-      doc.line(15, currentY + 4, 195, currentY + 4);
+        const itemsLabel = `${item.productName} (${item.quantity}x)`;
+        const itemsLabelTrunc = itemsLabel.length > 22 ? itemsLabel.substring(0, 19) + '...' : itemsLabel;
+        doc.text(itemsLabelTrunc, 82, currentY);
 
-      doc.setFont('Helvetica', 'bold');
-      doc.setTextColor(79, 70, 229);
-      doc.setFontSize(8);
-      doc.text(t.id, 18, currentY);
+        doc.text(t.totalDiscountAmount > 0 ? `-${formatRupiah(t.totalDiscountAmount)}` : '-', 128, currentY);
+        
+        doc.setFont('Helvetica', 'bold');
+        doc.text(formatRupiah(t.totalBill), 154, currentY);
 
-      doc.setFont('Helvetica', 'normal');
-      doc.setTextColor(30, 30, 40);
-      const custName = t.customerName.length > 18 ? t.customerName.substring(0, 15) + '...' : t.customerName;
-      doc.text(custName, 42, currentY);
+        // Status translation text
+        doc.setFontSize(7);
+        if (t.debtAmount === 0) {
+          doc.setTextColor(16, 185, 129);
+          doc.text('Lunas', 180, currentY);
+        } else if (t.paidAmount === 0) {
+          doc.setTextColor(239, 68, 68);
+          doc.text('Hutang', 180, currentY);
+        } else {
+          doc.setTextColor(245, 158, 11);
+          doc.text('Sisa Hutang', 180, currentY);
+        }
 
-      const itemsLabel = `${t.productName} (${t.quantity}x)`;
-      const itemsLabelTrunc = itemsLabel.length > 22 ? itemsLabel.substring(0, 19) + '...' : itemsLabel;
-      doc.text(itemsLabelTrunc, 82, currentY);
-
-      doc.text(t.totalDiscountAmount > 0 ? `-${formatRupiah(t.totalDiscountAmount)}` : '-', 128, currentY);
-      
-      doc.setFont('Helvetica', 'bold');
-      doc.text(formatRupiah(t.totalBill), 154, currentY);
-
-      // Status translation text
-      doc.setFontSize(7);
-      if (t.debtAmount === 0) {
-        doc.setTextColor(16, 185, 129);
-        doc.text('Lunas', 180, currentY);
-      } else if (t.paidAmount === 0) {
-        doc.setTextColor(239, 68, 68);
-        doc.text('Hutang', 180, currentY);
-      } else {
-        doc.setTextColor(245, 158, 11);
-        doc.text('Sisa Hutang', 180, currentY);
-      }
-
-      currentY += 9;
+        currentY += 9;
+        rowIndex++;
+      });
     });
 
     if (filteredTransactions.length === 0) {
@@ -397,37 +413,41 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e4e6e8] dark:divide-[#43445b]">
-                  {filteredTransactions.map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="px-3 py-2 font-mono font-bold text-primary whitespace-nowrap">{t.id}</td>
-                      <td className="px-3 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap text-[10px]">{formatDateIndo(t.date).split(' ')[0]}</td>
-                      <td className="px-3 py-2 font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[120px]">{t.customerName}</td>
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300 truncate max-w-[100px]">{t.productName}</td>
-                      <td className="px-3 py-2 text-slate-600 dark:text-slate-400 text-center whitespace-nowrap">{t.quantity}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                        {t.totalDiscountAmount > 0 ? `-${formatRupiah(t.totalDiscountAmount)}` : '-'}
-                      </td>
-                      <td className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">{formatRupiah(t.totalBill)}</td>
-                      <td className="px-3 py-2 text-right">
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold inline-block whitespace-nowrap ${
-                          t.debtAmount === 0 
-                            ? 'bg-success/10 text-success' 
-                            : t.paidAmount === 0 
-                              ? 'bg-danger/10 text-danger' 
-                              : 'bg-warning/10 text-warning'
-                        }`}>
-                          {t.debtAmount === 0 
-                            ? 'Lunas' 
-                            : t.paidAmount === 0 
-                              ? 'Hutang' 
-                              : `Sisa ${formatRupiah(t.debtAmount)}`
-                          }
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredTransactions
+                    .filter(t => t.customerName && t.customerName.trim() !== '')
+                    .flatMap((t) => 
+                      t.items.map((item, idx) => (
+                        <tr key={`${t.id}-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                          <td className="px-3 py-2 font-mono font-bold text-primary whitespace-nowrap">{t.id}</td>
+                          <td className="px-3 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap text-[10px]">{formatDateIndo(t.date).split(' ')[0]}</td>
+                          <td className="px-3 py-2 font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[120px]">{t.customerName}</td>
+                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300 truncate max-w-[100px]">{item.productName}</td>
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-400 text-center whitespace-nowrap">{item.quantity}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                            {t.totalDiscountAmount > 0 ? `-${formatRupiah(t.totalDiscountAmount)}` : '-'}
+                          </td>
+                          <td className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">{formatRupiah(t.totalBill)}</td>
+                          <td className="px-3 py-2 text-right">
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold inline-block whitespace-nowrap ${
+                              t.debtAmount === 0 
+                                ? 'bg-success/10 text-success' 
+                                : t.paidAmount === 0 
+                                  ? 'bg-danger/10 text-danger' 
+                                  : 'bg-warning/10 text-warning'
+                            }`}>
+                              {t.debtAmount === 0 
+                                ? 'Lunas' 
+                                : t.paidAmount === 0 
+                                  ? 'Hutang' 
+                                  : `Sisa ${formatRupiah(t.debtAmount)}`
+                              }
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
 
-                  {filteredTransactions.length === 0 && (
+                  {filteredTransactions.filter(t => t.customerName && t.customerName.trim() !== '').length === 0 && (
                     <tr>
                       <td colSpan={8} className="px-3 py-12 text-center text-slate-400 dark:text-slate-500">
                         Tidak ada transaksi dalam range periode lapor '{activeReportType}' yang dipilih.
@@ -440,67 +460,71 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
 
             {/* Mobile View Cards (Zero horizontal scroll) */}
             <div className="md:hidden divide-y divide-[#e4e6e8] dark:divide-[#43445b]/50">
-              {filteredTransactions.map((t) => (
-                <div 
-                  key={t.id} 
-                  className="p-4 space-y-3 hover:bg-slate-50/40 dark:hover:bg-slate-800/20 transition-colors"
-                >
-                  {/* Header: Nota and Date */}
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="font-mono font-bold text-primary dark:text-indigo-400 text-xs">#{t.id}</span>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{formatDateIndo(t.date)}</p>
-                    </div>
-                    <div>
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                        t.debtAmount === 0 
-                          ? 'bg-success/15 text-success' 
-                          : t.paidAmount === 0 
-                            ? 'bg-danger/15 text-danger' 
-                            : 'bg-warning/15 text-warning'
-                      }`}>
-                        {t.debtAmount === 0 
-                          ? 'Lunas' 
-                          : t.paidAmount === 0 
-                            ? 'Hutang' 
-                            : `Sisa ${formatRupiah(t.debtAmount)}`
-                        }
-                      </span>
-                    </div>
-                  </div>
+              {filteredTransactions
+                .filter(t => t.customerName && t.customerName.trim() !== '')
+                .flatMap((t) => 
+                  t.items.map((item, idx) => (
+                    <div 
+                      key={`${t.id}-${idx}`} 
+                      className="p-4 space-y-3 hover:bg-slate-50/40 dark:hover:bg-slate-800/20 transition-colors"
+                    >
+                      {/* Header: Nota and Date */}
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="font-mono font-bold text-primary dark:text-indigo-400 text-xs">#{t.id}</span>
+                          <p className="text-[10px] text-slate-400 mt-0.5">{formatDateIndo(t.date)}</p>
+                        </div>
+                        <div>
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                            t.debtAmount === 0 
+                              ? 'bg-success/15 text-success' 
+                              : t.paidAmount === 0 
+                                ? 'bg-danger/15 text-danger' 
+                                : 'bg-warning/15 text-warning'
+                          }`}>
+                            {t.debtAmount === 0 
+                              ? 'Lunas' 
+                              : t.paidAmount === 0 
+                                ? 'Hutang' 
+                                : `Sisa ${formatRupiah(t.debtAmount)}`
+                            }
+                          </span>
+                        </div>
+                      </div>
 
-                  {/* Pelanggan Block */}
-                  <div>
-                    <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">Nama Pelanggan</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{t.customerName}</span>
-                  </div>
+                      {/* Pelanggan Block */}
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">Nama Pelanggan</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{t.customerName}</span>
+                      </div>
 
-                  {/* Product and Price Details */}
-                  <div className="bg-slate-50/75 dark:bg-[#1e1e2d]/50 p-3 rounded-xl space-y-2 text-xs border border-slate-100 dark:border-slate-800/30">
-                    <div className="flex justify-between items-start gap-4">
-                      <span className="text-slate-400 font-medium shrink-0">Barang & Qty:</span>
-                      <div className="text-right">
-                        <p className="font-semibold text-slate-700 dark:text-slate-300">{t.productName}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{t.quantity} x {formatRupiah(t.priceAtSale)}</p>
+                      {/* Product and Price Details */}
+                      <div className="bg-slate-50/75 dark:bg-[#1e1e2d]/50 p-3 rounded-xl space-y-2 text-xs border border-slate-100 dark:border-slate-800/30">
+                        <div className="flex justify-between items-start gap-4">
+                          <span className="text-slate-400 font-medium shrink-0">Barang & Qty:</span>
+                          <div className="text-right">
+                            <p className="font-semibold text-slate-700 dark:text-slate-300">{item.productName}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{item.quantity} x {formatRupiah(item.priceAtSale)}</p>
+                          </div>
+                        </div>
+
+                        {t.totalDiscountAmount > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400 font-medium">Diskon Potongan:</span>
+                            <span className="font-mono text-danger font-bold">-{formatRupiah(t.totalDiscountAmount)}</span>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between border-t border-slate-200/50 dark:border-slate-700/50 pt-2 font-bold">
+                          <span className="text-slate-500">Total Bersih:</span>
+                          <span className="font-mono text-primary dark:text-indigo-400 text-sm">{formatRupiah(t.totalBill)}</span>
+                        </div>
                       </div>
                     </div>
+                  ))
+                )}
 
-                    {t.totalDiscountAmount > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-400 font-medium">Diskon Potongan:</span>
-                        <span className="font-mono text-danger font-bold">-{formatRupiah(t.totalDiscountAmount)}</span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between border-t border-slate-200/50 dark:border-slate-700/50 pt-2 font-bold">
-                      <span className="text-slate-500">Total Bersih:</span>
-                      <span className="font-mono text-primary dark:text-indigo-400 text-sm">{formatRupiah(t.totalBill)}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {filteredTransactions.length === 0 && (
+              {filteredTransactions.filter(t => t.customerName && t.customerName.trim() !== '').length === 0 && (
                 <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-xs">
                   Tidak ada transaksi dalam range periode lapor '{activeReportType}' yang dipilih.
                 </div>

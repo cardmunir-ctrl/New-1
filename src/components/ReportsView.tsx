@@ -72,9 +72,6 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
   const productQuantities = useMemo(() => {
     const counts: { [productName: string]: number } = {};
     filteredTransactions.forEach((t) => {
-      // Only include transactions with customer name
-      if (!t.customerName || t.customerName.trim() === '') return;
-      
       // Aggregate all items in the transaction
       t.items.forEach((item) => {
         counts[item.productName] = (counts[item.productName] || 0) + item.quantity;
@@ -92,16 +89,14 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
   // Export CSV for Excel
   const handleExportExcel = () => {
     // Generate headers
-    const headers = ['No Nota', 'Tanggal', 'Nama Pelanggan', 'Barang', 'Qty', 'Harga Satuan', 'Potongan', 'Total Bersih', 'Dibayar', 'Hutang'];
+    const headers = ['No Nota', 'Tanggal', 'Barang', 'Qty', 'Harga Satuan', 'Potongan', 'Total Bersih', 'Dibayar', 'Hutang'];
     
-    // Generate rows - exclude transactions without customer name
+    // Generate rows
     const rows = filteredTransactions
-      .filter(t => t.customerName && t.customerName.trim() !== '')
       .flatMap(t => 
         t.items.map(item => [
           t.id,
           t.date,
-          t.customerName,
           item.productName,
           item.quantity,
           item.priceAtSale,
@@ -202,9 +197,8 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
     doc.setFontSize(8);
     doc.setFont('Helvetica', 'bold');
     doc.text('No Nota', 18, 92);
-    doc.text('Pelanggan', 42, 92);
-    doc.text('Barang & Qty', 82, 92);
-    doc.text('Potongan', 128, 92);
+    doc.text('Barang & Qty', 62, 92);
+    doc.text('Potongan', 120, 92);
     doc.text('Total Bersih', 154, 92);
     doc.text('Status', 180, 92);
 
@@ -214,9 +208,6 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
     doc.setTextColor(60, 60, 70);
 
     filteredTransactions.forEach((t) => {
-      // Skip transactions without customer name
-      if (!t.customerName || t.customerName.trim() === '') return;
-
       t.items.forEach((item) => {
         // Manage page overflow cleanly
         if (currentY > 275) {
@@ -255,14 +246,12 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
 
         doc.setFont('Helvetica', 'normal');
         doc.setTextColor(30, 30, 40);
-        const custName = t.customerName.length > 18 ? t.customerName.substring(0, 15) + '...' : t.customerName;
-        doc.text(custName, 42, currentY);
 
         const itemsLabel = `${item.productName} (${item.quantity}x)`;
         const itemsLabelTrunc = itemsLabel.length > 22 ? itemsLabel.substring(0, 19) + '...' : itemsLabel;
-        doc.text(itemsLabelTrunc, 82, currentY);
+        doc.text(itemsLabelTrunc, 62, currentY);
 
-        doc.text(t.totalDiscountAmount > 0 ? `-${formatRupiah(t.totalDiscountAmount)}` : '-', 128, currentY);
+        doc.text(t.totalDiscountAmount > 0 ? `-${formatRupiah(t.totalDiscountAmount)}` : '-', 120, currentY);
         
         doc.setFont('Helvetica', 'bold');
         doc.text(formatRupiah(t.totalBill), 154, currentY);
@@ -404,7 +393,6 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
                   <tr className="text-slate-500 dark:text-slate-400 font-bold border-b border-[#e4e6e8] dark:border-[#43445b] uppercase tracking-wider">
                     <th className="px-3 py-3 whitespace-nowrap">No Nota</th>
                     <th className="px-3 py-3 whitespace-nowrap">Tgl</th>
-                    <th className="px-3 py-3 whitespace-nowrap">Pelanggan</th>
                     <th className="px-3 py-3 whitespace-nowrap">Barang</th>
                     <th className="px-3 py-3 whitespace-nowrap">Qty</th>
                     <th className="px-3 py-3 text-right whitespace-nowrap">Potongan</th>
@@ -414,13 +402,11 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
                 </thead>
                 <tbody className="divide-y divide-[#e4e6e8] dark:divide-[#43445b]">
                   {filteredTransactions
-                    .filter(t => t.customerName && t.customerName.trim() !== '')
                     .flatMap((t) => 
                       t.items.map((item, idx) => (
                         <tr key={`${t.id}-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                           <td className="px-3 py-2 font-mono font-bold text-primary whitespace-nowrap">{t.id}</td>
                           <td className="px-3 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap text-[10px]">{formatDateIndo(t.date).split(' ')[0]}</td>
-                          <td className="px-3 py-2 font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[120px]">{t.customerName}</td>
                           <td className="px-3 py-2 text-slate-700 dark:text-slate-300 truncate max-w-[100px]">{item.productName}</td>
                           <td className="px-3 py-2 text-slate-600 dark:text-slate-400 text-center whitespace-nowrap">{item.quantity}</td>
                           <td className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">
@@ -461,7 +447,6 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
             {/* Mobile View Cards (Zero horizontal scroll) */}
             <div className="md:hidden divide-y divide-[#e4e6e8] dark:divide-[#43445b]/50">
               {filteredTransactions
-                .filter(t => t.customerName && t.customerName.trim() !== '')
                 .flatMap((t) => 
                   t.items.map((item, idx) => (
                     <div 
@@ -490,12 +475,6 @@ export default function ReportsView({ transactions, products }: ReportsViewProps
                             }
                           </span>
                         </div>
-                      </div>
-
-                      {/* Pelanggan Block */}
-                      <div>
-                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">Nama Pelanggan</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{t.customerName}</span>
                       </div>
 
                       {/* Product and Price Details */}

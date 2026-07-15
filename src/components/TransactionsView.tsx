@@ -9,7 +9,6 @@ import {
   X, 
   Receipt, 
   Calendar, 
-  User, 
   ShoppingCart, 
   Tag, 
   Wallet, 
@@ -64,16 +63,7 @@ export const generateReceiptPDF = (t: Transaction) => {
   doc.setLineWidth(0.4);
   doc.line(15, 50, 195, 50);
 
-  // Customer block
-  doc.setTextColor(110, 115, 125);
-  doc.setFontSize(8);
-  doc.setFont('Helvetica', 'bold');
-  doc.text('KEPADA:', 15, 58);
-  
-  doc.setTextColor(30, 30, 40);
-  doc.setFontSize(11);
-  doc.setFont('Helvetica', 'bold');
-  doc.text(t.customerName || '-', 15, 64);
+
   
   // Reference info
   doc.setTextColor(110, 115, 125);
@@ -234,7 +224,6 @@ export default function TransactionsView({
   const [paymentAmount, setPaymentAmount] = useState<number | ''>('');
 
   // Form states for multiple items
-  const [customerName, setCustomerName] = useState('');
   const [date, setDate] = useState('2026-07-15');
   const [items, setItems] = useState<TransactionItem[]>([]);
   const [discounts, setDiscounts] = useState<{ description: string; amount: number }[]>([]);
@@ -249,7 +238,6 @@ export default function TransactionsView({
   // Search filter
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => 
-      t.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.items.some(item => item.productName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       t.id.toLowerCase().includes(searchQuery.toLowerCase())
     );
@@ -325,7 +313,6 @@ export default function TransactionsView({
   // Start Transaction Editing
   const startEdit = (t: Transaction) => {
     setEditingTransaction(t);
-    setCustomerName(t.customerName);
     setDate(t.date);
     setItems(t.items.map(item => ({ ...item })));
     setDiscounts(t.discounts.map(d => ({ description: d.description, amount: d.amount })));
@@ -340,9 +327,6 @@ export default function TransactionsView({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) return;
-
-    // Keep customer name empty if not provided (don't default to 'Umum')
-    const finalCustomerName = customerName.trim();
 
     const discountList: Discount[] = discounts.map((d, index) => ({
       id: `d-form-${Date.now()}-${index}`,
@@ -361,7 +345,6 @@ export default function TransactionsView({
 
       onEditTransaction({
         id: editingTransaction.id,
-        customerName: finalCustomerName,
         date,
         items,
         discounts: discountList,
@@ -374,7 +357,6 @@ export default function TransactionsView({
       setEditingTransaction(null);
     } else {
       onAddTransaction({
-        customerName: finalCustomerName,
         date,
         items,
         discounts: discountList,
@@ -404,7 +386,6 @@ export default function TransactionsView({
     // Update the transaction with the new payment
     onEditTransaction({
       id: paymentTransaction.id,
-      customerName: paymentTransaction.customerName,
       date: paymentTransaction.date,
       items: paymentTransaction.items,
       discounts: paymentTransaction.discounts,
@@ -775,32 +756,18 @@ export default function TransactionsView({
               {/* Form Content Scrollable */}
               <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
                 
-                {/* Customer and Date Row */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                      <User className="h-3 w-3" /> Nama Pelanggan (Opsional)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Masukkan nama pelanggan..."
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-lg border border-[#e4e6e8] dark:border-[#43445b] bg-[#fff] dark:bg-[#1e1e2d] text-slate-700 dark:text-slate-100 focus:outline-hidden focus:border-primary transition-all"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                      <Calendar className="h-3 w-3" /> Tanggal Nota
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-lg border border-[#e4e6e8] dark:border-[#43445b] bg-[#fff] dark:bg-[#1e1e2d] text-slate-700 dark:text-slate-100 focus:outline-hidden focus:border-primary transition-all font-mono"
-                    />
-                  </div>
+                {/* Date Row */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                    <Calendar className="h-3 w-3" /> Tanggal Nota
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-[#e4e6e8] dark:border-[#43445b] bg-[#fff] dark:bg-[#1e1e2d] text-slate-700 dark:text-slate-100 focus:outline-hidden focus:border-primary transition-all font-mono"
+                  />
                 </div>
 
                 {/* DYNAMIC ITEMS SECTION */}
@@ -1058,12 +1025,8 @@ export default function TransactionsView({
                 </div>
  
                 {/* Invoice Details Grid */}
-                <div className="grid grid-cols-2 gap-4 text-xs">
+                <div className="text-xs">
                   <div>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">Kepada:</p>
-                    <p className="font-bold text-slate-800 mt-1">{viewingTransaction.customerName}</p>
-                  </div>
-                  <div className="text-right">
                     <p className="text-[10px] text-slate-400 font-bold uppercase">Tanggal :</p>
                     <p className="font-bold text-slate-800 mt-1">{formatDateIndo(viewingTransaction.date)}</p>
                   </div>
@@ -1201,7 +1164,6 @@ export default function TransactionsView({
             >
               <div>
                 <h4 className="font-bold text-slate-800 dark:text-slate-100">Lunasi Hutang</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Pelanggan: {paymentTransaction.customerName}</p>
               </div>
 
               {/* Transaction Summary */}
